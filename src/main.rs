@@ -11,7 +11,7 @@ fn main() {
     };
 
     let interfaces = interfaces();
-    let used_interface = interfaces.iter().find(|e| e.is_up() && e.name == "wlan0");
+    let used_interface = interfaces.iter().find(|e| e.is_up());
 
     let data_channel = match used_interface {
         Some(interface) => datalink::channel(interface, config),
