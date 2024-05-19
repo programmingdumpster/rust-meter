@@ -1,4 +1,4 @@
-use std::fs::{create_dir, File};
+use std::fs::{create_dir, File, OpenOptions};
 use std::io::{self, BufReader, Read, Write};
 use std::num::ParseIntError;
 use std::path::PathBuf;
@@ -8,8 +8,19 @@ use pnet::datalink::{self, interfaces, Config};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_path = PathBuf::from("/home/mateusz/.config/meter/data_backup.txt");
-    let readed = read_data(file_path)?;
-    let mut bytes: u64 = readed;
+    let mut bytes: u64;
+
+    if file_path.exists() {
+        bytes = match read_data(file_path) {
+            Ok(value) => value,
+            Err(e) => {
+                println!("File reading error: {}", e);
+                0
+            }
+        };
+    } else {
+        bytes = 0;
+    }
 
     print!("{}", bytes);
 
@@ -60,35 +71,31 @@ fn bytes_to_megabytes(bytes: u64) -> f64 {
 
 fn save_data_usage_info(bytes: u64) {
     let directory = PathBuf::from("/home/mateusz/.config/meter");
-    let file_path = PathBuf::from("/home/mateusz/.config/meter/data_backup.txt");
+    let file_path = directory.join("data_backup.txt");
     let data = bytes.to_string();
 
-    if directory.exists() {
-    } else {
-        match create_dir(directory) {
-            Ok(_) => (),
-            Err(e) => println!("Dir creating error: {}", e),
-        }
-    }
-    if file_path.exists() {
-    } else {
-        match File::create(&file_path) {
-            Ok(_) => (),
-            Err(e) => println!("File creation error: {}", e),
+    if !directory.exists() {
+        if let Err(e) = create_dir(&directory) {
+            println!("Dir creating error: {}", e);
+            return;
         }
     }
 
-    let mut file = match File::create(&file_path) {
+    let mut file = match OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&file_path)
+    {
         Ok(file) => file,
         Err(e) => {
-            println!("Błąd podczas otwierania pliku: {}", e);
+            println!("File opening error: {}", e);
             return;
         }
     };
 
     if let Err(e) = write!(file, "{}", data) {
         println!("File writing error: {}", e);
-        return;
     }
 }
 
