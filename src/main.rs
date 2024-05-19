@@ -11,7 +11,7 @@ fn main() {
     };
 
     let interfaces = interfaces();
-    let used_interface = interfaces.iter().find(|e| e.is_up());
+    let used_interface = interfaces.iter().find(|e| e.is_up() && e.name == "wlan0"); //set it to your interface  iw dev
 
     let data_channel = match used_interface {
         Some(interface) => datalink::channel(interface, config),
@@ -29,7 +29,13 @@ fn main() {
             Ok(packet) => {
                 bytes += packet.len() as u64;
                 let megabytes = bytes_to_megabytes(bytes);
-                print!("\rData used: {:.3} MB", megabytes);
+                let gigabytes = megabytes / 1000.0;
+                if megabytes > 999.9 {
+                    print!("\rData used: {:.3} GB", gigabytes);
+                } else {
+                    print!("\rData used: {:.3} MB", megabytes);
+                }
+
                 io::stdout().flush().unwrap();
             }
             Err(e) => {
