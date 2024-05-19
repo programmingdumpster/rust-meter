@@ -6,15 +6,9 @@ use std::path::PathBuf;
 use pnet::datalink::Channel::Ethernet;
 use pnet::datalink::{self, interfaces, Config};
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let file_path = PathBuf::from("/home/mateusz/.config/meter/data_backup.txt");
-    let readed = match read_data(file_path) {
-        Ok(data) => data,
-        Err(e) => {
-            println!("parsing error: {}", e);
-            0
-        }
-    };
+    let readed = read_data(file_path)?;
     let mut bytes: u64 = readed;
 
     print!("{}", bytes);
@@ -51,7 +45,7 @@ fn main() {
                     print!("\rData used: {:.3} MB", megabytes);
                 }
 
-                io::stdout().flush().unwrap();
+                io::stdout().flush()?;
             }
             Err(e) => {
                 println!("packet read error {}", e);
@@ -92,7 +86,7 @@ fn save_data_usage_info(bytes: u64) {
         }
     };
 
-    if let Err(e) = writeln!(file, "{}", data) {
+    if let Err(e) = write!(file, "{}", data) {
         println!("File writing error: {}", e);
         return;
     }
@@ -103,5 +97,6 @@ fn read_data(path: PathBuf) -> Result<u64, ParseIntError> {
     let mut buf_reader = BufReader::new(file.unwrap());
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
+    print!("{:?}", contents.trim());
     contents.parse::<u64>()
 }
