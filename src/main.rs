@@ -1,14 +1,56 @@
+use clap::{Parser, Subcommand};
+use pnet::datalink::{self, interfaces, Channel::Ethernet, Config};
 use std::fs::{create_dir, File, OpenOptions};
 use std::io::{self, BufReader, Read, Write};
 use std::num::ParseIntError;
 use std::path::PathBuf;
+use std::thread;
+use std::time::Duration;
 
-use pnet::datalink::Channel::Ethernet;
-use pnet::datalink::{self, interfaces, Config};
+// I used derive first time in my life in this code
+
+#[derive(Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+    #[command(subcommand)]
+    command: Option<Commands>,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    #[command(alias = "-u")]
+    Usage,
+    #[command(alias = "-s")]
+    Speedtest,
+}
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let file_path = PathBuf::from("/home/mateusz/.config/meter/data_backup.txt");
+    let file_path = PathBuf::from("/home/mateusz/.config/meter/data_backup.txt"); //path to file with saved data ( its for logging data usage when app is added to systemctl services (linux))
     let mut bytes: u64;
+    let cli = Cli::parse();
+    if let Some(command) = cli.command {
+        match command {
+            Commands::Usage => loop {
+                match read_data(file_path.clone()) {
+                    Ok(bytes) => {
+                        let megabytes = bytes_to_megabytes(bytes);
+                        let gigabytes = megabytes / 1000.0;
+                        if megabytes > 999.9 {
+                            print!("\rData used: {:.3} GB", gigabytes);
+                        } else {
+                            print!("\rData used: {:.3} MB", megabytes);
+                        }
+                        io::stdout().flush()?;
+                    }
+                    Err(e) => {
+                        println!("read err: {}", e);
+                    }
+                }
+                thread::sleep(Duration::from_secs(5));
+            },
+            Commands::Speedtest => todo!(), //i will do it (maybe)
+        }
+    }
 
     if file_path.exists() {
         bytes = match read_data(file_path) {
@@ -22,15 +64,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         bytes = 0;
     }
 
-    print!("{}", bytes);
-
     let config = Config {
         read_buffer_size: 4096,
         ..Default::default()
     };
 
     let interfaces = interfaces();
-    let used_interface = interfaces.iter().find(|e| e.is_up() && e.name == "wlan0"); //set it to your interface  iw dev
+    let used_interface = interfaces.iter().find(|e| e.is_up() && e.name == "wlan0"); //Use "iw dev" in bash, it will return ur interfaces, select one u use and paste it into e.name = ""
 
     let data_channel = match used_interface {
         Some(interface) => datalink::channel(interface, config),
@@ -44,19 +84,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     loop {
+        // for dummies like me
+        // this is raw packet "[0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e, 0x6f]"
+        // every entry like 0x00  = 1byte  | this packet has 7 bytes in total,
         match rx.next() {
             Ok(packet) => {
                 save_data_usage_info(bytes);
                 bytes += packet.len() as u64;
-                let megabytes = bytes_to_megabytes(bytes);
-                let gigabytes = megabytes / 1000.0;
-                if megabytes > 999.9 {
-                    print!("\rData used: {:.3} GB", gigabytes);
-                } else {
-                    print!("\rData used: {:.3} MB", megabytes);
-                }
-
-                io::stdout().flush()?;
             }
             Err(e) => {
                 println!("packet read error {}", e);
@@ -65,12 +99,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 }
 
-fn bytes_to_megabytes(bytes: u64) -> f64 {
-    return bytes as f64 / (1024.0 * 1024.0);
-}
-
 fn save_data_usage_info(bytes: u64) {
-    let directory = PathBuf::from("/home/mateusz/.config/meter");
+    let directory = PathBuf::from("/home/mateusz/.config/meter"); // set it as your  config dir
     let file_path = directory.join("data_backup.txt");
     let data = bytes.to_string();
 
@@ -99,11 +129,15 @@ fn save_data_usage_info(bytes: u64) {
     }
 }
 
+fn bytes_to_megabytes(bytes: u64) -> f64 {
+    bytes as f64 / (1024.0 * 1024.0)
+}
+
 fn read_data(path: PathBuf) -> Result<u64, ParseIntError> {
     let file = File::open(path);
     let mut buf_reader = BufReader::new(file.unwrap());
     let mut contents = String::new();
     buf_reader.read_to_string(&mut contents).unwrap();
-    print!("{:?}", contents.trim());
+
     contents.parse::<u64>()
 }
