@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
-// I used derive first time in my life in this code
+
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
